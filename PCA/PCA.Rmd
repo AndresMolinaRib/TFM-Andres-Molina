@@ -223,7 +223,7 @@ ppca_scores$Muestra <- rownames(ppca_scores)
 
 
 library(readxl)
-etiquetas_path <- "Etiquetas.xlsx"  
+etiquetas_path <- "../Etiquetas.xlsx"  
 etiquetas <- read_excel(etiquetas_path)
 
 
