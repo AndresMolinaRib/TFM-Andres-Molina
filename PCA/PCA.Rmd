@@ -151,7 +151,7 @@ ppca_scores$Muestra <- rownames(ppca_scores)
 
 
 # Load labels for samples from an Excel file
-etiquetas_path <- "Etiquetas.xlsx"  
+etiquetas_path <- "../Etiquetas.xlsx"  
 etiquetas <- read_excel(etiquetas_path)
 
 # Merge PCA scores with sample labels
