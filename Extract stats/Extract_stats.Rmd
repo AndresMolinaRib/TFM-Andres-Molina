@@ -1,0 +1,171 @@
+---
+title: "Untitled"
+author: "Andrés Molina Ribagorda"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+````{r warning = FALSE, message = FALSE}
+library(clusterProfiler)
+library(org.Mm.eg.db)
+library(ggplot2)
+library(ggkegg)
+library(enrichplot)
+library(DESeq2)
+library(DOSE)
+library(plotly)
+library(visNetwork)
+library(tidygraph)
+library(dplyr)
+library(ggraph)
+library(ggplot2)
+library(rmarkdown)
+library(htmltools)
+library(UpSetR)
+library(ggupset)
+library(ReactomePA)
+library(writexl)
+library(openxlsx)
+library(pathview)
+````
+
+````{r}
+#Functions section
+
+rename_columns_to_first_word <- function(data) {
+
+  data <- data %>%
+    rename_with(~ sapply(strsplit(.x, "_"), `[`, 1)) 
+  return(data)
+}
+
+create_filtered_data <- function(data, param) {
+  
+  if (!param %in% c( "deqms", "msempire", "msqrob")) {
+    stop("El parámetro debe ser uno de: 'ebayes', 'deqms', 'msempire', 'msqrob'")
+  }
+  
+  
+  selected_columns <- data %>%
+    select(protein_id,gene_symbols_or_id, ENTREZID, contains(param))
+  
+  
+  assign(paste0("data_", param), selected_columns, envir = .GlobalEnv)
+  selected_columns <- rename_columns_to_first_word(selected_columns)
+  
+  return(selected_columns)
+}
+
+
+
+get_data_by_param <- function(param) {
+  
+  if (!param %in% c("bayes", "deq", "empire", "rob")) {
+    stop("El parámetro debe ser uno de: 'bayes', 'deq', 'empire', 'rob'")
+  }
+  
+  
+  variable_name <- paste0(param, "_data")
+  
+  
+  if (!exists(variable_name, envir = .GlobalEnv)) {
+    stop(paste("La variable", variable_name, "no existe en el entorno global"))
+  }
+  
+  
+  return(get(variable_name, envir = .GlobalEnv))
+}
+capitalize_first <- function(text) {
+  paste0(toupper(substr(text, 1, 1)), tolower(substr(text, 2, nchar(text))))
+}
+
+generate_genes <- function(result, up, down,i){
+  downregulated_genes_symbol <- result$datos_down$gene
+  upregulated_genes_symbol <- result$datos_up$gene
+  
+  downregulated_genes_filtered <- result$data_down$ENTREZID
+  upregulated_genes_filtered <- result$data_up$ENTREZID
+
+  return(list(downregulated_genes_symbol = downregulated_genes_symbol, upregulated_genes_symbol = upregulated_genes_symbol, downregulated_genes_filtered = downregulated_genes_filtered, upregulated_genes_filtered = upregulated_genes_filtered))
+}
+
+generate_data <- function(datos, i, p.value){
+  
+  data_down <- datos[datos$foldchange.log2 < -0 ,]
+  data_up <- datos[datos$foldchange.log2 >= 0,]
+  
+  data_down <- data_down[order(data_down$pvalue), ]
+  data_up <- data_up[order(data_up$pvalue), ]
+
+  datos_down <- data_down
+  datos_up <- data_up
+  
+  return(list(data_down = data_down, data_up = data_up, datos_down = datos_down, datos_up = datos_up))
+}
+
+write_dataframe <- function(dataframes, param, tdata){
+  output_dir <- paste0(tdata)
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = T)
+}
+  write.xlsx(dataframes$down, file = paste0(tdata, "/",param,"_down.xlsx"))
+  write.xlsx(dataframes$up, file = paste0(tdata, "/",param,"_up.xlsx"))
+  write.xlsx(dataframes$datos, file = paste0(tdata, "/",param,".xlsx"))
+}
+
+create_dataframes <- function(result, param){
+  dataframes_down <- list("Datos" = result$datos_down)
+
+  dataframes_up <- list("Datos" = result$datos_up)
+  dataframes_up_down <- list("Datos" = rbind(result$datos_down,result$datos_up))
+  return(list(up=dataframes_up,down=dataframes_down, datos = dataframes_up_down))
+}
+
+````
+
+
+````{r}
+pvaluee <- 1 #select all the data
+archivos <- list.files(path = "../PCA", pattern = "\\.xlsx$", full.names = FALSE)
+archivos <- archivos[1:length(archivos)]
+statistics <- c("deqms", "msempire", "msqrob")
+
+#extract data for each regulation and statistics
+for (archivo in archivos){
+
+  prefijo <- gsub("_.*", "", archivo)
+  sample <- gsub("^[^_]*_([A-Z]).*", "\\1", archivo)
+  grupo <- paste0(prefijo,sample)
+  grupo <- gsub(" ", "", grupo)
+  data <- read.xlsx(paste0("../PCA/",archivo))
+  
+  
+  uniprot_ids <- unlist(strsplit(as.character(data$protein_id), split = ";"))
+  ids_entrez <- bitr(uniprot_ids, fromType = "UNIPROT", toType = "ENTREZID", OrgDb = org.Mm.eg.db)
+  data$ENTREZID <- sapply(as.character(data$protein_id), function(x) {
+    ids <- unlist(strsplit(x, split = " "))
+    matched_ids <- ids_entrez$ENTREZID[ids_entrez$UNIPROT %in% ids]
+    if (length(matched_ids) > 0) {
+        paste(unique(matched_ids), collapse = ";")
+    } else {
+        NA
+    }
+  })
+  data$gene_symbols_or_id <- sapply(data$gene_symbols_or_id, capitalize_first)
+
+  for (i in statistics){
+      datos <- create_filtered_data(data, i)
+      result <- generate_data(datos, 2, pvaluee)
+      genes <- generate_genes(result, genes_up,genes_down,2)
+      dataframe<- create_dataframes(result, i)
+      write_dataframe(dataframe, i, grupo)
+  }
+}
+````
+
+

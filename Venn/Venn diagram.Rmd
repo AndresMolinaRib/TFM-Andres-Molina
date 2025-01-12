@@ -1,0 +1,710 @@
+---
+title: "Venn Diagrams"
+author: "Andrés Molina Ribagorda"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+````{r}
+library(readr)
+library(VennDiagram)
+library(openxlsx)
+library(readxl)
+library(writexl)
+library(ggvenn)
+library(stringr)
+library(survcomp)
+
+
+
+
+
+
+
+````
+
+
+````{r}
+
+#Function section
+capitalize_first <- function(text) {
+  paste0(toupper(substr(text, 1, 1)), tolower(substr(text, 2, nchar(text))))
+}
+
+leer_archivos_param <- function(directorio, param) {
+  
+  archivos <- list.files(path = directorio, pattern = paste0(param, "\\.xlsx$"), full.names = TRUE)
+  
+  
+  if (length(archivos) == 0) {
+    stop("No se encontraron archivos con el sufijo especificado.")
+  }
+  
+  
+  lista_datos <- lapply(archivos, function(archivo) {
+    tryCatch(
+      {
+        read_excel(archivo, sheet = "Datos")
+      },
+      error = function(e) {
+        warning(paste("No se pudo leer la hoja 'Datos' en el archivo:", archivo))
+        return(NULL)
+      }
+    )
+  })
+  
+  
+  lista_datos <- lista_datos[!sapply(lista_datos, is.null)]
+  
+  nombres <- sapply(basename(archivos), function(archivo) {
+    sub("_.*", "", archivo) 
+  })
+  
+  names(lista_datos) <- nombres
+  
+  return(lista_datos)
+}
+
+w_file <- function(datos, param, FMMd4 = 0, id = 0){
+  
+  if(FMMd4 == 0){
+    if(id==0){
+  exclusivo_M <- datos_protein$gene_symbols_or_id[datos_protein$protein_id %in% setdiff(datos$M, union(datos$F, datos$Md4))]
+  exclusivo_Md4 <- datos_protein$gene_symbols_or_id[datos_protein$protein_id %in% setdiff(datos$Md4, union(datos$F, datos$M))]
+  exclusivo_F <- datos_protein$gene_symbols_or_id[datos_protein$protein_id %in% setdiff(datos$F, union(datos$M, datos$Md4))]
+  interseccion_M_Md4 <- datos_protein$gene_symbols_or_id[datos_protein$protein_id %in% setdiff(intersect(datos$M, datos$Md4), datos$F)]
+  interseccion_F_Md4 <- datos_protein$gene_symbols_or_id[datos_protein$protein_id %in% setdiff(intersect(datos$F, datos$Md4), datos$M)]
+  interseccion_M_F <- datos_protein$gene_symbols_or_id[datos_protein$protein_id %in% setdiff(intersect(datos$M, datos$F), datos$Md4)]
+  
+  resultados_df <- data.frame(
+    Exclusivo_M = c(exclusivo_M, rep(NA, pmax(0, max(length(exclusivo_Md4), length(exclusivo_F),length(interseccion_M_Md4), length(interseccion_F_Md4), length(interseccion_M_F) ) - length(exclusivo_M)))),
+    Exclusivo_Md4 = c(exclusivo_Md4, rep(NA, pmax(0, max(length(exclusivo_M), length(exclusivo_F),length(interseccion_M_Md4), length(interseccion_F_Md4), length(interseccion_M_F) ) - length(exclusivo_Md4)))),
+    Exclusivo_F = c(exclusivo_F, rep(NA, pmax(0, max(length(exclusivo_Md4), length(exclusivo_M),length(interseccion_M_Md4), length(interseccion_F_Md4), length(interseccion_M_F) ) - length(exclusivo_F)))),
+    Interseccion_M_Md4 = c(interseccion_M_Md4, rep(NA, pmax(0, max(length(exclusivo_M), length(exclusivo_Md4), length(exclusivo_F), length(interseccion_F_Md4), length(interseccion_M_F)) - length(interseccion_M_Md4)))),
+    Interseccion_F_Md4 = c(interseccion_F_Md4, rep(NA, pmax(0, max(length(exclusivo_M), length(exclusivo_Md4), length(exclusivo_F), length(interseccion_M_Md4), length(interseccion_M_F)) - length(interseccion_F_Md4)))),
+    Interseccion_M_F = c(interseccion_M_F, rep(NA, pmax(0, max(length(exclusivo_M), length(exclusivo_Md4), length(exclusivo_F), length(interseccion_F_Md4), length(interseccion_M_Md4)) - length(interseccion_M_F))))
+  )
+    }
+    else if (id == 1){
+    
+
+  exclusivo_M <- datos_protein$protein_id[datos_protein$protein_id %in% setdiff(datos$M, union(datos$F, datos$Md4))]
+  exclusivo_Md4 <- datos_protein$protein_id[datos_protein$protein_id %in% setdiff(datos$Md4, union(datos$F, datos$M))]
+  exclusivo_F <- datos_protein$protein_id[datos_protein$protein_id %in% setdiff(datos$F, union(datos$M, datos$Md4))]
+  interseccion_M_Md4 <- datos_protein$protein_id[datos_protein$protein_id %in% setdiff(intersect(datos$M, datos$Md4), datos$F)]
+  interseccion_F_Md4 <- datos_protein$protein_id[datos_protein$protein_id %in% setdiff(intersect(datos$F, datos$Md4), datos$M)]
+  interseccion_M_F <- datos_protein$protein_id[datos_protein$protein_id %in% setdiff(intersect(datos$M, datos$F), datos$Md4)]
+  
+  resultados_df <- data.frame(
+    Exclusivo_M = c(exclusivo_M, rep(NA, pmax(0, max(length(exclusivo_Md4), length(exclusivo_F),length(interseccion_M_Md4), length(interseccion_F_Md4), length(interseccion_M_F) ) - length(exclusivo_M)))),
+    Exclusivo_Md4 = c(exclusivo_Md4, rep(NA, pmax(0, max(length(exclusivo_M), length(exclusivo_F),length(interseccion_M_Md4), length(interseccion_F_Md4), length(interseccion_M_F) ) - length(exclusivo_Md4)))),
+    Exclusivo_F = c(exclusivo_F, rep(NA, pmax(0, max(length(exclusivo_Md4), length(exclusivo_M),length(interseccion_M_Md4), length(interseccion_F_Md4), length(interseccion_M_F) ) - length(exclusivo_F)))),
+    Interseccion_M_Md4 = c(interseccion_M_Md4, rep(NA, pmax(0, max(length(exclusivo_M), length(exclusivo_Md4), length(exclusivo_F), length(interseccion_F_Md4), length(interseccion_M_F)) - length(interseccion_M_Md4)))),
+    Interseccion_F_Md4 = c(interseccion_F_Md4, rep(NA, pmax(0, max(length(exclusivo_M), length(exclusivo_Md4), length(exclusivo_F), length(interseccion_M_Md4), length(interseccion_M_F)) - length(interseccion_F_Md4)))),
+    Interseccion_M_F = c(interseccion_M_F, rep(NA, pmax(0, max(length(exclusivo_M), length(exclusivo_Md4), length(exclusivo_F), length(interseccion_F_Md4), length(interseccion_M_Md4)) - length(interseccion_M_F))))
+  )
+    }
+  
+  }
+  else{
+    exclusivo_MW_Md4W <- datos_protein$gene_symbols_or_id[datos_protein$protein_id %in% setdiff(datos$MW_vs_Md4W, datos$MS_vs_Md4S)]
+    exclusivo_MS_Md4S <- datos_protein$gene_symbols_or_id[datos_protein$protein_id %in% setdiff(datos$MS_vs_Md4S, datos$MW_vs_Md4W)]
+    interseccion <- datos_protein$gene_symbols_or_id[datos_protein$protein_id %in% intersect(datos$MS_vs_Md4S, datos$MW_vs_Md4W)]
+    
+    resultados_df <- data.frame(
+    Exclusivo_MW_Md4W = c(exclusivo_MW_Md4W, rep(NA, max(0, max(length(exclusivo_MS_Md4S), length(interseccion)) - length(exclusivo_MW_Md4W)))),
+    Exclusivo_MS_Md4S = c(exclusivo_MS_Md4S, rep(NA, max(0, max(length(exclusivo_MW_Md4W), length(interseccion)) - length(exclusivo_MS_Md4S)))),
+    Interseccion = c(interseccion, rep(NA, pmax(0, max(length(exclusivo_MW_Md4W), length(exclusivo_MS_Md4S)) - length(interseccion))))
+  )
+  }
+  if (!dir.exists("Resultados")) {
+    dir.create("Resultados")
+}
+  write_xlsx(resultados_df, paste0("Resultados/resultados_", param, ".xlsx"))
+  return(sapply(resultados_df, capitalize_first))
+}
+
+
+diagrama_Venn_grupo <- function(dataframe, param, direc){
+  
+  all_proteins <- unique(c(dataframe$deqms$protein, dataframe$msempire$protein, dataframe$msqrob$protein))
+  
+  if (str_extract(param, "[^_]+$") == "down"){
+    results <- data.frame(
+      protein = all_proteins,
+    
+      deq = all_proteins %in% dataframe$deqms$protein[dataframe$deqms$foldchange.log2 < -0.5 & dataframe$deqms$pvalue < 0.05],
+      empire = all_proteins %in% dataframe$msempire$protein[dataframe$msempire$foldchange.log2 < -0.5 & dataframe$msempire$pvalue < 0.05],
+      rob = all_proteins %in% dataframe$msqrob$protein[dataframe$msqrob$foldchange.log2 < -0.5 & dataframe$msqrob$pvalue < 0.05]
+    )
+  } 
+  if (str_extract(param, "[^_]+$") == "up"){
+     results <- data.frame(
+      protein = all_proteins,
+    
+      deq = all_proteins %in% (dataframe$deqms$protein[dataframe$deqms$foldchange.log2 > 0.5 & dataframe$deqms$pvalue < 0.05]),
+      empire = all_proteins %in% dataframe$msempire$protein[dataframe$msempire$foldchange.log2 > 0.5 & dataframe$msempire$pvalue < 0.05],
+      rob = all_proteins %in% dataframe$msqrob$protein[dataframe$msqrob$foldchange.log2 > 0.5 & dataframe$msqrob$pvalue < 0.05]
+    )
+  }
+  
+  rownames(results) <- results$protein
+  
+  deq_set <- rownames(results)[results$deq == TRUE]
+  empire_set <- rownames(results)[results$empire == TRUE]
+  rob_set <- rownames(results)[results$rob == TRUE]
+  
+  venn_data <- list(
+  "deq" = deq_set,
+  "empire" = empire_set,
+  "rob" = rob_set
+)
+  
+  todos_valores <- unlist(venn_data)
+
+  conteos <- table(todos_valores)
+  conteos
+
+
+  valores_comunes <- names(conteos[conteos >= 3])
+  
+  venn_diag <- ggvenn(venn_data, fill_color = c("skyblue", "pink", "lightgreen", "yellow")) + ggtitle(paste0("Venn diagram: ",param)) + theme(plot.title = element_text(hjust = 0.5, size = 16))
+  if (!dir.exists(direc)) {
+    dir.create(direc)
+}
+  ggsave(paste0(direc,"/ven_", param, ".png"), plot = venn_diag, bg="white")
+  return (valores_comunes)
+}
+
+
+
+diagrama_Venn_condicion <- function(direc, valores_Md4, valores_M, valores_F = NULL, param, FMMd4 = 0){
+  
+  all_proteins<- unique(c(valores_Md4, valores_M, valores_F))
+  result <- data.frame(
+    protein = all_proteins,
+    FW.S = all_proteins %in% valores_F,
+    MW.S = all_proteins %in% valores_M,
+    MWd4.S = all_proteins %in% valores_Md4
+  )
+  
+  rownames(result) <- result$protein
+  
+  F_set <- rownames(result)[result$FW.S == TRUE]
+  M_set <- rownames(result)[result$MW.S == TRUE]
+  Md4_set <- rownames(result)[result$MWd4.S == TRUE]
+  
+  if(FMMd4 == 0){
+  venn_data <- list(
+    "F" = F_set,
+    "M" = M_set,
+    "Md4" = Md4_set
+  )
+  }
+  else{
+    venn_data <- list(
+    "MW_vs_Md4W" = M_set,
+    "MS_vs_Md4S" = Md4_set
+  )
+  }
+  venn_diag <- ggvenn(venn_data, fill_color = c("skyblue", "pink", "lightgreen")) + ggtitle(paste0("Venn diagram: ",param)) + theme(plot.title = element_text(hjust = 0.5, size = 16))
+  if (!dir.exists(direc)) {
+    dir.create(direc)
+}
+  ggsave(paste0(direc, "/ven_", param, ".png"), plot = venn_diag, bg="white")
+  return(venn_data)
+}
+
+
+
+````
+
+````{r}
+data <- read.csv("protein_abundance__filter by group independently.tsv",sep = "\t", header = TRUE)
+datos_protein <- read_xlsx("../dea_final_prueba.xlsx")
+````
+
+
+
+````{r}
+#Extract Venn diagrams for each of the regulations and samples
+data_FS_down <- leer_archivos_param("../Extract stats/FWS", "down")
+data_MS_down <- leer_archivos_param("../Extract stats/MWL", "down")
+data_Md4S_down <- leer_archivos_param("../Extract stats/MWd4S", "down")
+
+
+valores_Md4S_down <- diagrama_Venn_grupo(data_Md4S_down, "Md4S_down", "S_down_full")
+valores_MS_down <- diagrama_Venn_grupo(data_MS_down, "MS_down", "S_down_full")
+valores_FS_down <- diagrama_Venn_grupo(data_FS_down, "FS_down", "S_down_full")
+
+datos_DS <- diagrama_Venn_condicion("S_down_full", valores_Md4S_down, valores_MS_down, valores_FS_down, "Down_S_not_combined")
+
+DS <- w_file(datos_DS, "Down_S_id_nc", id = 1)
+DS <- w_file(datos_DS, "Down_S_nc", id = 0)
+
+
+````
+
+````{r}
+data_FS_up <- leer_archivos_param("../Extract stats/FWS", "up")
+data_MS_up <- leer_archivos_param("../Extract stats/MWS", "up")
+data_Md4S_up <- leer_archivos_param("../Extract stats/MWd4S", "up")
+
+valores_Md4S_up <- diagrama_Venn_grupo(data_Md4S_up, "Md4S_up", "S_up_full")
+valores_MS_up <- diagrama_Venn_grupo(data_MS_up, "MS_up", "S_up_full")
+valores_FS_up <- diagrama_Venn_grupo(data_FS_up, "FS_up", "S_up_full")
+
+datos_uS <- diagrama_Venn_condicion("S_up_full", valores_Md4S_up, valores_MS_up, valores_FS_up, "Up_S_nc")
+
+uS <- w_file(datos_uS, "Up_S_id_nc", id = 1)
+uS <- w_file(datos_uS, "Up_S_nc", id = 0)
+````
+
+````{r}
+data_Md4E_up <- leer_archivos_param("../Extract stats/MWd4E", "up")
+
+
+valores_Md4E_up <- diagrama_Venn_grupo(data_Md4E_up, "Md4E_up", "E_up_full")
+
+
+datos_uE <- diagrama_Venn_condicion("E_up_full",valores_Md4E_up, NULL, NULL, "Up_E_nc")
+
+uE <- w_file(datos_uE, "Up_E_id_nc", id = 1)
+uE <- w_file(datos_uE, "Up_E_nc", id = 0)
+````
+
+````{r}
+data_Md4E_down <- leer_archivos_param("../Extract stats/MWd4E", "down")
+
+
+valores_Md4E_down <- diagrama_Venn_grupo(data_Md4E_down, "Md4E_down", "E_down_full")
+
+
+datos_DE <- diagrama_Venn_condicion("E_down_full", valores_Md4E_down, NULL, NULL, "Down_E_nc")
+
+DE <- w_file(datos_DE, "Down_E_id_nc", id = 1)
+DE <- w_file(datos_DE, "Down_E_nc", id = 0)
+````
+
+````{r}
+# prueba_down <- leer_archivos_param("prueba", "down")
+# prueba_up<- leer_archivos_param("prueba", "up")
+# 
+# valores_prueba_down <- diagrama_Venn_grupo(prueba_down, "prueba_down")
+# valores_prueba_up <- diagrama_Venn_grupo(prueba_up, "prueba_up")
+# 
+# datos_DE <- diagrama_Venn_condicion(valores_Md4E_down, NULL, NULL, "Down_S")
+# 
+# DE <- w_file(datos_DE, "Down_E")
+````
+
+````{r}
+str_extract("Md4L_up", "[^_]+$")
+
+data_FL_down <- leer_archivos_param("../Extract stats/FWL", "down")
+data_ML_down <- leer_archivos_param("../Extract stats/MWL", "down")
+data_Md4L_down <- leer_archivos_param("../Extract stats/MWd4L", "down")
+
+valores_Md4L_down <- diagrama_Venn_grupo(data_Md4L_down, "Md4L_down", "L_down_full")
+valores_ML_down <- diagrama_Venn_grupo(data_ML_down, "ML_down", "L_down_full")
+valores_FL_down <- diagrama_Venn_grupo(data_FL_down, "FL_down", "L_down_full")
+
+datos_DL <- diagrama_Venn_condicion("L_down_full", valores_Md4L_down, valores_ML_down, valores_FL_down, "Down_L_nc")
+
+DL <- w_file(datos_DL, "Down_L_id_nc", id = 1)
+DL <- w_file(datos_DL, "Down_L_nc", id = 0)
+````
+
+````{r}
+data_FL_up <- leer_archivos_param("../Extract stats/FWL", "up")
+data_ML_up <- leer_archivos_param("../Extract stats/MWL", "up")
+data_Md4L_up <- leer_archivos_param("../Extract stats/MWd4L", "up")
+
+valores_Md4L_up <- diagrama_Venn_grupo(data_Md4L_up, "Md4L_up", "L_up_full")
+valores_ML_up <- diagrama_Venn_grupo(data_ML_up, "ML_up", "L_up_full")
+valores_FL_up <- diagrama_Venn_grupo(data_FL_up, "FL_up", "L_up_full")
+
+datos_uL <- diagrama_Venn_condicion("L_up_full", valores_Md4L_up, valores_ML_up, valores_FL_up, "Up_L_nc")
+
+uL <- w_file(datos_uL, "Up_L_id_nc", id = 1)
+uL <- w_file(datos_uL, "Up_L_nc", id = 0)
+````
+
+
+````{r}
+#Combine statistics
+data_FL_deqms <- rbind(data_FL_down$deqms, data_FL_up$deqms)
+data_FL_msqrob <- rbind(data_FL_down$msqrob, data_FL_up$msqrob)
+data_FL_msempire <- rbind(data_FL_down$msempire, data_FL_up$msempire)
+
+data_FS_deqms <- rbind(data_FS_down$deqms, data_FS_up$deqms)
+data_FS_msqrob <- rbind(data_FS_down$msqrob, data_FS_up$msqrob)
+data_FS_msempire <- rbind(data_FS_down$msempire, data_FS_up$msempire)
+
+data_ML_deqms <- rbind(data_ML_down$deqms, data_ML_up$deqms)
+data_ML_msqrob <- rbind(data_ML_down$msqrob, data_ML_up$msqrob)
+data_ML_msempire <- rbind(data_ML_down$msempire, data_ML_up$msempire)
+
+data_MS_deqms <- rbind(data_MS_down$deqms, data_MS_up$deqms)
+data_MS_msqrob <- rbind(data_MS_down$msqrob, data_MS_up$msqrob)
+data_MS_msempire <- rbind(data_MS_down$msempire, data_MS_up$msempire)
+
+data_Md4L_deqms <- rbind(data_Md4L_down$deqms, data_Md4L_up$deqms)
+data_Md4L_msqrob <- rbind(data_Md4L_down$msqrob, data_Md4L_up$msqrob)
+data_Md4L_msempire <- rbind(data_Md4L_down$msempire, data_Md4L_up$msempire)
+
+data_Md4S_deqms <- rbind(data_Md4S_down$deqms, data_Md4S_up$deqms)
+data_Md4S_msqrob <- rbind(data_Md4S_down$msqrob, data_Md4S_up$msqrob)
+data_Md4S_msempire <- rbind(data_Md4S_down$msempire, data_Md4S_up$msempire)
+
+data_Md4E_deqms <- rbind(data_Md4E_down$deqms, data_Md4E_up$deqms)
+data_Md4E_msqrob <- rbind(data_Md4E_down$msqrob, data_Md4E_up$msqrob)
+data_Md4E_msempire <- rbind(data_Md4E_down$msempire, data_Md4E_up$msempire)
+
+
+combined_results_FL <- merge(data_FL_deqms, data_FL_msqrob, by = "protein", suffixes = c("_deqms", "_msqrob"))
+combined_results_FL <- merge(combined_results_FL, data_FL_msempire, by = "protein")
+
+combined_results_FS <- merge(data_FS_deqms, data_FS_msqrob, by = "protein", suffixes = c("_deqms", "_msqrob"))
+combined_results_FS <- merge(combined_results_FS, data_FS_msempire, by = "protein")
+
+combined_results_ML <- merge(data_ML_deqms, data_ML_msqrob, by = "protein", suffixes = c("_deqms", "_msqrob"))
+combined_results_ML <- merge(combined_results_ML, data_ML_msempire, by = "protein")
+
+combined_results_MS <- merge(data_MS_deqms, data_MS_msqrob, by = "protein", suffixes = c("_deqms", "_msqrob"))
+combined_results_MS <- merge(combined_results_MS, data_MS_msempire, by = "protein")
+
+combined_results_Md4S <- merge(data_Md4S_deqms, data_Md4S_msqrob, by = "protein", suffixes = c("_deqms", "_msqrob"))
+combined_results_Md4S <- merge(combined_results_Md4S, data_Md4S_msempire, by = "protein")
+
+combined_results_Md4L <- merge(data_Md4L_deqms, data_Md4L_msqrob, by = "protein", suffixes = c("_deqms", "_msqrob"))
+combined_results_Md4L <- merge(combined_results_Md4L, data_Md4L_msempire, by = "protein")
+
+combined_results_Md4E <- merge(data_Md4E_deqms, data_Md4E_msqrob, by = "protein", suffixes = c("_deqms", "_msqrob"))
+combined_results_Md4E <- merge(combined_results_Md4E, data_Md4E_msempire, by = "protein")
+
+
+
+combined_p_values_FL <- apply(combined_results_FL[, c("pvalue_deqms", "pvalue_msqrob", "pvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+combined_p_values_FS <- apply(combined_results_FS[, c("pvalue_deqms", "pvalue_msqrob", "pvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+combined_p_values_ML <- apply(combined_results_ML[, c("pvalue_deqms", "pvalue_msqrob", "pvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+combined_p_values_MS <- apply(combined_results_MS[, c("pvalue_deqms", "pvalue_msqrob", "pvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+combined_p_values_Md4S <- apply(combined_results_Md4S[, c("pvalue_deqms", "pvalue_msqrob", "pvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+combined_p_values_Md4L <- apply(combined_results_Md4L[, c("pvalue_deqms", "pvalue_msqrob", "pvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+
+combined_p_values_Md4E <- apply(combined_results_Md4E[, c("pvalue_deqms", "pvalue_msqrob", "pvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+
+
+
+
+combined_q_values_FL <- apply(combined_results_FL[, c("qvalue_deqms", "qvalue_msqrob", "qvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+combined_q_values_FS <- apply(combined_results_FS[, c("qvalue_deqms", "qvalue_msqrob", "qvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+combined_q_values_ML <- apply(combined_results_ML[, c("qvalue_deqms", "qvalue_msqrob", "qvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+combined_q_values_MS <- apply(combined_results_MS[, c("qvalue_deqms", "qvalue_msqrob", "qvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+combined_q_values_Md4S <- apply(combined_results_Md4S[, c("qvalue_deqms", "qvalue_msqrob", "qvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+combined_q_values_Md4L <- apply(combined_results_Md4L[, c("qvalue_deqms", "qvalue_msqrob", "qvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+
+combined_q_values_Md4E <- apply(combined_results_Md4E[, c("qvalue_deqms", "qvalue_msqrob", "qvalue")], 1, function(p) {
+    combine.test(p, method = "fisher")
+})
+
+
+
+combined_results_FL$combined_p_value <- combined_p_values_FL
+combined_results_FS$combined_p_value <- combined_p_values_FS
+combined_results_ML$combined_p_value <- combined_p_values_ML
+combined_results_MS$combined_p_value <- combined_p_values_MS
+combined_results_Md4S$combined_p_value <- combined_p_values_Md4S
+combined_results_Md4L$combined_p_value <- combined_p_values_Md4L
+combined_results_Md4E$combined_p_value <- combined_p_values_Md4E
+
+combined_results_FL$combined_q_value <- combined_q_values_FL
+combined_results_FS$combined_q_value <- combined_q_values_FS
+combined_results_ML$combined_q_value <- combined_q_values_ML
+combined_results_MS$combined_q_value <- combined_q_values_MS
+combined_results_Md4S$combined_q_value <- combined_q_values_Md4S
+combined_results_Md4L$combined_q_value <- combined_q_values_Md4L
+combined_results_Md4E$combined_q_value <- combined_q_values_Md4E
+
+
+
+combined_results_FL$var_deqms <- combined_results_FL$sd_deqms^2
+combined_results_FL$var_msqrob <- combined_results_FL$sd_msqrob^2
+combined_results_FL$var_msempire <- combined_results_FL$sd^2
+
+combined_results_FS$var_deqms <- combined_results_FS$sd_deqms^2
+combined_results_FS$var_msqrob <- combined_results_FS$sd_msqrob^2
+combined_results_FS$var_msempire <- combined_results_FS$sd^2
+
+combined_results_ML$var_deqms <- combined_results_ML$sd_deqms^2
+combined_results_ML$var_msqrob <- combined_results_ML$sd_msqrob^2
+combined_results_ML$var_msempire <- combined_results_ML$sd^2
+
+combined_results_MS$var_deqms <- combined_results_MS$sd_deqms^2
+combined_results_MS$var_msqrob <- combined_results_MS$sd_msqrob^2
+combined_results_MS$var_msempire <- combined_results_MS$sd^2
+
+combined_results_Md4S$var_deqms <- combined_results_Md4S$sd_deqms^2
+combined_results_Md4S$var_msqrob <- combined_results_Md4S$sd_msqrob^2
+combined_results_Md4S$var_msempire <- combined_results_Md4S$sd^2
+
+combined_results_Md4L$var_deqms <- combined_results_Md4L$sd_deqms^2
+combined_results_Md4L$var_msqrob <- combined_results_Md4L$sd_msqrob^2
+combined_results_Md4L$var_msempire <- combined_results_Md4L$sd^2
+
+combined_results_Md4E$var_deqms <- combined_results_Md4E$sd_deqms^2
+combined_results_Md4E$var_msqrob <- combined_results_Md4E$sd_msqrob^2
+combined_results_Md4E$var_msempire <- combined_results_Md4E$sd^2
+
+
+
+combined_results_FL$logFC_combined <- with(combined_results_FL, (
+  (foldchange.log2_deqms / var_deqms) +
+  (foldchange.log2_msqrob / var_msqrob)+
+  (foldchange.log2 / var_msempire)
+) / (
+  (1 / var_deqms) +
+  (1 / var_msqrob) +
+  (1 / var_msempire)
+))
+
+combined_results_FS$logFC_combined <- with(combined_results_FS, (
+  (foldchange.log2_deqms / var_deqms) +
+  (foldchange.log2_msqrob / var_msqrob) +
+  (foldchange.log2 / var_msempire)
+) / (
+  (1 / var_deqms) +
+  (1 / var_msqrob) +
+  (1 / var_msempire)
+))
+
+combined_results_ML$logFC_combined <- with(combined_results_ML, (
+  (foldchange.log2_deqms / var_deqms) +
+  (foldchange.log2_msqrob / var_msqrob) +
+  (foldchange.log2 / var_msempire)
+) / (
+  (1 / var_deqms) +
+  (1 / var_msqrob) +
+  (1 / var_msempire)
+))
+
+combined_results_MS$logFC_combined <- with(combined_results_MS, (
+  (foldchange.log2_deqms / var_deqms) +
+  (foldchange.log2_msqrob / var_msqrob) +
+  (foldchange.log2 / var_msempire)
+) / (
+  (1 / var_deqms) +
+  (1 / var_msqrob) +
+  (1 / var_msempire)
+))
+
+combined_results_Md4S$logFC_combined <- with(combined_results_Md4S, (
+  (foldchange.log2_deqms / var_deqms) +
+  (foldchange.log2_msqrob / var_msqrob) +
+  (foldchange.log2 / var_msempire)
+) / (
+  (1 / var_deqms) +
+  (1 / var_msqrob) +
+  (1 / var_msempire)
+))
+
+combined_results_Md4L$logFC_combined <- with(combined_results_Md4L, (
+  (foldchange.log2_deqms / var_deqms) +
+  (foldchange.log2_msqrob / var_msqrob) +
+  (foldchange.log2 / var_msempire)
+) / (
+  (1 / var_deqms) +
+  (1 / var_msqrob) +
+  (1 / var_msempire)
+))
+
+combined_results_Md4E$logFC_combined <- with(combined_results_Md4E, (
+  (foldchange.log2_deqms / var_deqms) +
+  (foldchange.log2_msqrob / var_msqrob) +
+  (foldchange.log2 / var_msempire)
+) / (
+  (1 / var_deqms) +
+  (1 / var_msqrob) +
+  (1 / var_msempire)
+))
+
+
+
+
+combined_FL <- data.frame(
+  protein = combined_results_FL$protein,
+  gene = combined_results_FL$gene_deqms,
+  ENTREZID = combined_results_FL$ENTREZID_deqms,
+  pvalue = combined_results_FL$combined_p_value,
+  qvalue = combined_results_FL$combined_q_value,
+  logFC = combined_results_FL$logFC_combined
+)
+
+combined_FS <- data.frame(
+  protein = combined_results_FS$protein,
+  gene = combined_results_FS$gene_deqms,
+  ENTREZID = combined_results_FS$ENTREZID_deqms,
+  pvalue = combined_results_FS$combined_p_value,
+  qvalue = combined_results_FS$combined_q_value,
+  logFC = combined_results_FS$logFC_combined
+)
+
+combined_ML <- data.frame(
+  protein = combined_results_ML$protein,
+  gene = combined_results_ML$gene_deqms,
+  ENTREZID = combined_results_ML$ENTREZID_deqms,
+  pvalue = combined_results_ML$combined_p_value,
+  qvalue = combined_results_ML$combined_q_value,
+  logFC = combined_results_ML$logFC_combined
+)
+
+combined_MS <- data.frame(
+  protein = combined_results_MS$protein,
+  gene = combined_results_MS$gene_deqms,
+  ENTREZID = combined_results_MS$ENTREZID_deqms,
+  pvalue = combined_results_MS$combined_p_value,
+  qvalue = combined_results_MS$combined_q_value,
+  logFC = combined_results_MS$logFC_combined
+)
+
+combined_Md4S <- data.frame(
+  protein = combined_results_Md4S$protein,
+  gene = combined_results_Md4S$gene_deqms,
+  ENTREZID = combined_results_Md4S$ENTREZID_deqms,
+  pvalue = combined_results_Md4S$combined_p_value,
+  qvalue = combined_results_Md4S$combined_q_value,
+  logFC = combined_results_Md4S$logFC_combined
+)
+
+combined_Md4L <- data.frame(
+  protein = combined_results_Md4L$protein,
+  gene = combined_results_Md4L$gene_deqms,
+  ENTREZID = combined_results_Md4L$ENTREZID_deqms,
+  pvalue = combined_results_Md4L$combined_p_value,
+  qvalue = combined_results_Md4L$combined_q_value,
+  logFC = combined_results_Md4L$logFC_combined
+)
+
+combined_Md4E <- data.frame(
+  protein = combined_results_Md4E$protein,
+  gene = combined_results_Md4E$gene_deqms,
+  ENTREZID = combined_results_Md4E$ENTREZID_deqms,
+  pvalue = combined_results_Md4E$combined_p_value,
+  qvalue = combined_results_Md4E$combined_q_value,
+  logFC = combined_results_Md4E$logFC_combined
+)
+
+
+
+write_xlsx(combined_FL,"datos_combinados_FL.xlsx" )
+write_xlsx(combined_FS,"datos_combinados_FS.xlsx" )
+write_xlsx(combined_ML,"datos_combinados_ML.xlsx" )
+write_xlsx(combined_MS,"datos_combinados_MS.xlsx" )
+write_xlsx(combined_Md4S,"datos_combinados_Md4S.xlsx" )
+write_xlsx(combined_Md4L,"datos_combinados_Md4L.xlsx" )
+write_xlsx(combined_Md4E,"datos_combinados_Md4E.xlsx" )
+
+````
+
+````{r}
+#Venn diagrams for each of the combined statistics and samples
+
+valores_Md4L_down <- combined_Md4L$protein[combined_Md4L$logFC < -0.5 &  combined_Md4L$pvalue<0.05]
+valores_ML_down <- combined_ML$protein[combined_ML$logFC < -0.5 & combined_ML$pvalue<0.05]
+valores_FL_down <- combined_FL$protein[combined_FL$logFC < -0.5 & combined_FL$pvalue<0.05]
+
+datos_DL <- diagrama_Venn_condicion("L_down_full", valores_Md4L_down, valores_ML_down, valores_FL_down, "Down_L")
+
+DL <- w_file(datos_DL, "Down_L_id", id = 1)
+DL <- w_file(datos_DL, "Down_L", id = 0)
+````
+
+```{r}
+valores_Md4L_up <- combined_Md4L$protein[combined_Md4L$logFC > 0.5 & combined_Md4L$pvalue<0.05]
+valores_ML_up <- combined_ML$protein[combined_ML$logFC > 0.5 & combined_ML$pvalue<0.05]
+valores_FL_up <- combined_FL$protein[combined_FL$logFC > 0.5 & combined_FL$pvalue<0.05]
+
+datos_uL <- diagrama_Venn_condicion("L_up_full", valores_Md4L_up, valores_ML_up, valores_FL_up, "Up_L")
+
+uL <- w_file(datos_uL, "Up_L_id", id = 1)
+uL <- w_file(datos_uL, "Up_L", id = 0)
+````
+
+````{r}
+valores_Md4E_down <- combined_Md4E$protein[combined_Md4E$logFC < -0.5 & combined_Md4E$pvalue < 0.05]
+
+
+datos_DE <- diagrama_Venn_condicion("E_down_full", valores_Md4E_down, NULL, NULL, "Down_E")
+
+DE <- w_file(datos_DE, "Down_E_id", id = 1)
+DE <- w_file(datos_DE, "Down_E", id = 0)
+````
+
+````{r}
+valores_Md4E_up <- combined_Md4E$protein[combined_Md4E$logFC > 0.5 & combined_Md4E$pvalue < 0.05]
+
+
+datos_uE <- diagrama_Venn_condicion("E_up_full", valores_Md4E_up, NULL, NULL, "Up_E")
+
+uE <- w_file(datos_uE, "Up_E_id", id = 1)
+uE <- w_file(datos_uE, "Up_E", id = 0)
+````
+
+````{r}
+valores_Md4S_down <- combined_Md4S$protein[combined_Md4S$logFC < -0.5 & combined_Md4S$pvalue < 0.05]
+valores_MS_down <- combined_MS$protein[combined_MS$logFC < -0.5 & combined_MS$pvalue < 0.05]
+valores_FS_down <- combined_FS$protein[combined_FS$logFC < -0.5 & combined_FS$pvalue < 0.05]
+
+datos_DS <- diagrama_Venn_condicion("S_down_full", valores_Md4S_down, valores_MS_down, valores_FS_down, "Down_S")
+
+DS <- w_file(datos_DS, "Down_S_id", id = 1)
+DS <- w_file(datos_DS, "Down_S", id = 0)
+
+````
+
+````{r}
+valores_Md4S_up <- combined_Md4S$protein[combined_Md4S$logFC > 0.5 & combined_Md4S$pvalue < 0.05]
+valores_MS_up <- combined_MS$protein[combined_MS$logFC > 0.5 & combined_MS$pvalue < 0.05]
+valores_FS_up <- combined_FS$protein[combined_FS$logFC > 0.5 & combined_FS$pvalue < 0.05]
+
+datos_uS <- diagrama_Venn_condicion("S_up_full", valores_Md4S_up, valores_MS_up, valores_FS_up, "Up_S")
+
+uS <- w_file(datos_uS, "Up_S_id", id = 1)
+uS <- w_file(datos_uS, "Up_S", id = 0)
+
+````
+
+
+
+
+
