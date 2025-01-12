@@ -1,0 +1,190 @@
+---
+title: "Untitled"
+author: "Andrés Molina Ribagorda"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+````{r warning = FALSE, message = FALSE}
+library(clusterProfiler)
+library(org.Mm.eg.db)
+library(ggplot2)
+library(ggkegg)
+library(enrichplot)
+library(DESeq2)
+library(DOSE)
+library(plotly)
+library(visNetwork)
+library(tidygraph)
+library(dplyr)
+library(ggraph)
+library(ggplot2)
+library(rmarkdown)
+library(htmltools)
+library(UpSetR)
+library(ggupset)
+library(ReactomePA)
+library(writexl)
+library(openxlsx)
+library(pathview)
+````
+
+````{r}
+#Functions section
+
+# Function to rename column names to their first word
+rename_columns_to_first_word <- function(data) {
+
+  data <- data %>%
+    rename_with(~ sapply(strsplit(.x, "_"), `[`, 1)) # Split column names by "_" and take the first part
+  return(data)
+}
+
+# Function to filter data based on a specific parameter and rename columns
+create_filtered_data <- function(data, param) {
+  # Validate the parameter
+  if (!param %in% c( "deqms", "msempire", "msqrob")) {
+    stop("The parameter must be one of: 'ebayes', 'deqms', 'msempire', 'msqrob'")
+  }
+  
+  # Select relevant columns based on the parameter
+  selected_columns <- data %>%
+    select(protein_id,gene_symbols_or_id, ENTREZID, contains(param))
+  
+  # Rename columns to their first word
+  assign(paste0("data_", param), selected_columns, envir = .GlobalEnv)
+  selected_columns <- rename_columns_to_first_word(selected_columns)
+  
+  return(selected_columns)
+}
+
+
+# Function to retrieve data by parameter from the global environment
+get_data_by_param <- function(param) {
+  
+  if (!param %in% c("bayes", "deq", "empire", "rob")) {
+    stop("The parameter must be one of: 'bayes', 'deq', 'empire', 'rob'")
+  }
+  
+  # Construct the variable name based on the parameter
+  variable_name <- paste0(param, "_data")
+  
+  # Check if the variable exists in the global environment
+  if (!exists(variable_name, envir = .GlobalEnv)) {
+    stop(paste("La variable", variable_name, "no existe en el entorno global"))
+  }
+  
+  
+  return(get(variable_name, envir = .GlobalEnv))
+}
+
+# Function to capitalize the first letter of a string
+capitalize_first <- function(text) {
+  paste0(toupper(substr(text, 1, 1)), tolower(substr(text, 2, nchar(text))))
+}
+
+# Function to generate gene lists based on the results
+generate_genes <- function(result, up, down,i){
+  downregulated_genes_symbol <- result$datos_down$gene
+  upregulated_genes_symbol <- result$datos_up$gene
+  
+  downregulated_genes_filtered <- result$data_down$ENTREZID
+  upregulated_genes_filtered <- result$data_up$ENTREZID
+
+  return(list(downregulated_genes_symbol = downregulated_genes_symbol, upregulated_genes_symbol = upregulated_genes_symbol, downregulated_genes_filtered = downregulated_genes_filtered, upregulated_genes_filtered = upregulated_genes_filtered))
+}
+
+# Function to generate data subsets based on log2 fold change and p-value
+generate_data <- function(datos, i, p.value){
+  
+  # Separate data into upregulated and downregulated based on fold change
+  data_down <- datos[datos$foldchange.log2 < -0 ,]
+  data_up <- datos[datos$foldchange.log2 >= 0,]
+  
+  # Sort each subset by p-value
+  data_down <- data_down[order(data_down$pvalue), ]
+  data_up <- data_up[order(data_up$pvalue), ]
+
+  datos_down <- data_down
+  datos_up <- data_up
+  
+  return(list(data_down = data_down, data_up = data_up, datos_down = datos_down, datos_up = datos_up))
+}
+
+# Function to write data frames to Excel files
+write_dataframe <- function(dataframes, param, tdata){
+  output_dir <- paste0(tdata)
+  if (!dir.exists(output_dir)) {
+    dir.create(output_dir, recursive = T)
+}
+  write.xlsx(dataframes$down, file = paste0(tdata, "/",param,"_down.xlsx"))
+  write.xlsx(dataframes$up, file = paste0(tdata, "/",param,"_up.xlsx"))
+  write.xlsx(dataframes$datos, file = paste0(tdata, "/",param,".xlsx"))
+}
+
+# Function to create data frames for upregulated and downregulated genes
+create_dataframes <- function(result, param){
+  dataframes_down <- list("Datos" = result$datos_down)
+
+  dataframes_up <- list("Datos" = result$datos_up)
+  dataframes_up_down <- list("Datos" = rbind(result$datos_down,result$datos_up))
+  return(list(up=dataframes_up,down=dataframes_down, datos = dataframes_up_down))
+}
+
+````
+
+
+````{r}
+# Define p-value threshold (1 selects all data)
+pvaluee <- 1 
+
+# List all Excel files in the specified directory
+archivos <- list.files(path = "../PCA", pattern = "\\.xlsx$", full.names = FALSE)
+archivos <- archivos[1:length(archivos)]
+
+# Statistical methods to be analyzed
+statistics <- c("deqms", "msempire", "msqrob")
+
+#extract data for each regulation and statistics
+for (archivo in archivos){
+  # Extract the prefix and sample from the file name
+  prefijo <- gsub("_.*", "", archivo)
+  sample <- gsub("^[^_]*_([A-Z]).*", "\\1", archivo)
+  grupo <- paste0(prefijo,sample)
+  grupo <- gsub(" ", "", grupo)
+  
+  # Read the Excel file
+  data <- read.xlsx(paste0("../PCA/",archivo))
+  
+   # Extract and convert UniProt IDs to ENTREZ IDs
+  uniprot_ids <- unlist(strsplit(as.character(data$protein_id), split = ";"))
+  ids_entrez <- bitr(uniprot_ids, fromType = "UNIPROT", toType = "ENTREZID", OrgDb = org.Mm.eg.db)
+  
+  # Add ENTREZ IDs to the data frame
+  data$ENTREZID <- sapply(as.character(data$protein_id), function(x) {
+    ids <- unlist(strsplit(x, split = " "))
+    matched_ids <- ids_entrez$ENTREZID[ids_entrez$UNIPROT %in% ids]
+    if (length(matched_ids) > 0) {
+        paste(unique(matched_ids), collapse = ";")
+    } else {
+        NA
+    }
+  })
+  data$gene_symbols_or_id <- sapply(data$gene_symbols_or_id, capitalize_first)
+   # Loop through each statistical method
+  for (i in statistics){
+      datos <- create_filtered_data(data, i)
+      result <- generate_data(datos, 2, pvaluee)
+      genes <- generate_genes(result, genes_up,genes_down,2)
+      dataframe<- create_dataframes(result, i)
+      write_dataframe(dataframe, i, grupo)
+  }
+}
+````
+
+

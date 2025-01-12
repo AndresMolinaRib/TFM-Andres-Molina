@@ -1,0 +1,251 @@
+---
+title: "Heatmap"
+author: "Andrés Molina Ribagorda"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+````{r}
+library(readxl)
+library(pheatmap)
+library(ggplot2)
+library(gridExtra)
+library(ggrepel)
+library(gplots)
+library(dplyr)
+library(tidyr)
+
+
+file_path <- c("Datos heatmap M.xlsx", "Datos heatmap F.xlsx","Datos heatmap Md4.xlsx")
+
+# Impute missing values
+imputar_valores <- function(data) {
+  data$W1[is.na(data$W1)] <- data$W2[is.na(data$W1)]
+  data$W2[is.na(data$W2)] <- data$W1[is.na(data$W2)]
+  data$S1[is.na(data$S1)] <- data$S2[is.na(data$S1)]
+  data$S2[is.na(data$S2)] <- data$S1[is.na(data$S2)]
+  return(data)
+}
+
+# Save a combined plot with a heatmap and a pie chart
+save_grid_plot <- function(filename, heatmap_plot, pie_plot, width = 12, height = 6, dpi = 300) {
+  ggsave(
+    filename = filename,
+    plot = grid.arrange(
+      heatmap_plot$gtable,  
+      pie_plot,             
+      ncol = 2              
+    ),
+    width = width,
+    height = height,
+    dpi = dpi,
+    device = "png"
+  )
+}
+
+
+for (file in file_path){
+  sheets <- excel_sheets(file)
+for (sheet in sheets) {
+  
+  data <- read_excel(file, sheet = sheet)
+  data <- imputar_valores(data)
+  
+  # Remove rows with missing or duplicated protein IDs
+  data <- data[!is.na(data$protein_id),]
+  data <- data[!duplicated(data$protein_id), ]
+  
+  # Set rownames to protein IDs for easier matrix handling
+  rownames(data) <- data[[1]]
+  
+  # Extract logFC values for sorting and filtering
+  logFC <- data$logFC
+  
+  # Order data by descending logFC
+  data <- data[order(-data$logFC),] 
+  
+  # Generate a heatmap for logFC values
+  heatmap_plot <- pheatmap(
+    as.matrix(data[,6]),
+
+    cluster_rows = F,
+    cluster_cols = F,
+    display_numbers = FALSE,
+    
+    main = paste("Heatmap -", sheet)
+  )
+  
+  ggsave(paste0(sheet,"_heatmap.png"), plot = heatmap_plot)
+  
+  
+  # Count the number of upregulated and downregulated proteins
+  up_down <- dim(data[data$logFC > 0,])[1] 
+  down_down <- dim(data[data$logFC < 0,])[1] 
+  
+  # Prepare data for pie chart
+  pie_data <- data.frame(
+    Category = c("Up", "Down"),
+    Count = c(sum(up_down), sum(down_down))
+  )
+  
+  # Generate a pie chart for the change distribution
+  pie_plot <- ggplot(pie_data, aes(x = "", y = Count, fill = Category)) +
+    geom_bar(stat = "identity", width = 1) +
+    coord_polar(theta = "y") +
+    theme_void() +
+    labs(
+      title = paste("Change distribution -", sheet),
+      fill = "Category"
+    ) +
+    scale_fill_manual(values = c("skyblue", "orange"))
+  
+  # Combine and save heatmap and pie chart as a grid plot
+  save_grid_plot(
+  filename = paste0(sheet, "_combined_plot.png"),
+  heatmap_plot = heatmap_plot,
+  pie_plot = pie_plot)
+  
+  
+  # Annotate the data for volcano plot
+  data$Regulation <- ifelse(data$pvalue < 0.05 & data$logFC > 0.5, "Upregulated",
+                   ifelse(data$pvalue < 0.05 & data$logFC < -0.5, "Downregulated", 
+                          "Not Significant"))
+  data$Significance <- ifelse(data$pvalue < 0.05 & abs(data$logFC) > 0.5,
+                            "Significant", "Not Significant")
+  
+  # Generate a volcano plot
+  volcano_plot <- ggplot(data, aes(x = logFC, y = -log10(pvalue))) +
+  geom_point(aes(color = Regulation), alpha = 0.7, size = 2) +
+  scale_color_manual(values = c("Upregulated" = "red", "Downregulated" = "blue", "Not Significant" = "gray")) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", color = "blue", size = 0.5) +
+  geom_vline(xintercept = c(-0.5, 0.5), linetype = "dashed", color = "blue", size = 0.5) +
+  labs(
+    title = paste0("Volcano Plot - ", sheet), 
+    x = "log2 Fold Change",
+    y = "-log10 P-value",
+    color = "Significance"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    legend.position = "top"
+  )
+  volcano_plot <- volcano_plot +
+  geom_text_repel(
+    data = subset(data, Significance == "Significant"),
+    aes(label = protein_id),
+    size = 3,
+    max.overlaps = 10
+  )
+  
+  ggsave(paste0(sheet,"_volcano_plot.png"), plot = volcano_plot, bg = "white")
+  
+
+  # Additional filtering based on file and sheet names
+  # Specific conditions for filtering downregulated and upregulated genes
+  # Each condition handles specific cases and adjusts the dataset accordingly
+  if (grepl("F", file) & grepl("L", sheet)){
+    genes_down <- as.data.frame(read_excel("../Venn/Resultados/resultados_Down_L_id.xlsx"))
+    genes_up <- as.data.frame(read_excel("../Venn/Resultados/resultados_Up_L_id.xlsx"))
+    data <- data[data$protein_id %in% genes_down[,3]  | data$protein_id %in% genes_up[,3],]
+    param <- "F_L_"
+  }
+  else if (grepl("F", file) & grepl("S", sheet)){
+    genes_down <- as.data.frame(read_excel("../Venn/Resultados/resultados_Down_S_id.xlsx"))
+    genes_up <- as.data.frame(read_excel("../Venn/Resultados/resultados_Up_S_id.xlsx"))
+    data <- data[data$protein_id %in% genes_down[,3]  | data$protein_id %in% genes_up[,3],]
+    param <- "F_S_"
+  }
+  else if (grepl("Md4", file) & grepl("L", sheet) ){
+    genes_down <- as.data.frame(read_excel("../Venn/Resultados/resultados_Down_L_id.xlsx"))
+    genes_up <- as.data.frame(read_excel("../Venn/Resultados/resultados_Up_L_id.xlsx"))
+    if (any(!is.na(genes_down[,2])) | any(!is.na(genes_up[,2]))){
+      data <- data[data$protein_id %in% genes_down[,2]  | data$protein_id %in% genes_up[,2],]
+      param <- "Md4_L_"
+    }
+    else{
+      next
+    }
+  }
+  else if (grepl("Md4", file) & grepl("S", sheet)){
+    genes_down <- as.data.frame(read_excel("../Venn/Resultados/resultados_Down_S_id_nc.xlsx"))
+    genes_up <- as.data.frame(read_excel("../Venn/Resultados/resultados_Up_S_id_nc.xlsx"))
+    if (any(!is.na(genes_down[,2])) | any(!is.na(genes_up[,2]))){
+      data <- data[data$protein_id %in% genes_down[,2]  | data$protein_id %in% genes_up[,2],]
+      param <- "Md4_S_"
+    }
+    else{
+      next
+    }
+  }
+  else if (grepl("Md4", file) & grepl("E", sheet)){
+    genes_down <- as.data.frame(read_excel("../Venn/Resultados/resultados_Down_E_id.xlsx"))
+    genes_up <- as.data.frame(read_excel("../Venn/Resultados/resultados_Up_E_id.xlsx"))
+    if (any(!is.na(genes_down[,2])) | any(!is.na(genes_up[,2]))){
+      data <- data[data$protein_id %in% genes_down[,2]  | data$protein_id %in% genes_up[,2],]
+      param <- "Md4_E_"
+    }
+    else{
+      next
+    }
+  }
+  
+  # Extract significant proteins and generate heatmap for top/bottom entries
+  logFC <- data$logFC
+  data <- data[order(-data$logFC),] 
+  rownames(data) <- data$protein_id
+  dat <- as.matrix(data[[6]][!is.na(data[[6]])])
+  rownames(dat) <- data$protein_id[!is.na(data[[6]])]
+  head_proteins <- head(dat, n = 10)
+  tail_proteins <- tail(dat, n = 10)
+  datt <- rbind(head_proteins, tail_proteins)
+  
+  heatmap_plot <- pheatmap(
+    datt,
+    cluster_rows = F,
+    show_rownames = T,
+    cluster_cols = F,
+    display_numbers = FALSE,
+    main = paste("Heatmap -", sheet, " - exclusive")
+  )
+  dim(data[data$logFC > 0,])[1]
+  up_down <- dim(data[data$logFC > 0,])[1] 
+  down_down <- dim(data[data$logFC < 0,])[1] 
+  
+  
+  pie_data <- data.frame(
+    Category = c("Up", "Down"),
+    Count = c(sum(up_down), sum(down_down))
+  )
+  
+  pie_plot <- ggplot(pie_data, aes(x = "", y = Count, fill = Category)) +
+    geom_bar(stat = "identity", width = 1) +
+    coord_polar(theta = "y") +
+    theme_void() +
+    labs(
+      title = paste("Change distribution -", sheet),
+      fill = "Category"
+    ) +
+    scale_fill_manual(values = c("skyblue", "orange"))
+  
+  grid.arrange(
+  heatmap_plot$gtable, 
+  pie_plot,            
+  ncol = 2             
+)
+  ggsave(paste0(sheet,"_heatmap_exclusive.png"), plot = heatmap_plot)
+  
+  # Combine and save exclusive plots
+  save_grid_plot(
+  filename = paste0(sheet, "_combined_exclusive.png"),
+  heatmap_plot = heatmap_plot,
+  pie_plot = pie_plot
+)
+}}
+
+````
